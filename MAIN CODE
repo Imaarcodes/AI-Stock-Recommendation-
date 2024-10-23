@@ -15,8 +15,8 @@ import time
 from datetime import datetime, timedelta
 
 #on Alpaca online, once I login,it has options to create a new key and secret key which is required as below
-API_KEY = 'PKL7AFB8RQH0SZ0X45JY' #
-API_SECRET = 'LNrdS3fF73DqZvwht5edWRP2v0nr5NrsBwTO6Wdy'
+API_KEY = '-----' #
+API_SECRET = '-----'
 BASE_URL = 'https://paper-api.alpaca.markets'
 #APCA_API_BASE_URL = 'https://paper-api.alpaca.markets'
 
