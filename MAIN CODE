@@ -1,0 +1,139 @@
+#Imaar Chauthani October 2024
+#This program is written in Python to access online Alpaca trading platform
+#I registered at Alpaca.com to create a free paper trading account
+#I researched online to find platforms that allow paper trading free. There are few but Alpaca seems easy to use.
+#The only catch is its not real time market data, it is 15 min delayed.
+#Any trade you do with this program updates the online account on Alpaca. You can view the trade history online as well.
+#Hopefully you like it, I love it.
+#Some of this code is inferred from Alpaca documentation.
+
+!pip install alpaca-trade-api
+
+from alpaca_trade_api.rest import REST, TimeFrame # you have to import this first to access online account
+import pandas as pd
+import time
+from datetime import datetime, timedelta
+
+#on Alpaca online, once I login,it has options to create a new key and secret key which is required as below
+API_KEY = 'PKL7AFB8RQH0SZ0X45JY' #
+API_SECRET = 'LNrdS3fF73DqZvwht5edWRP2v0nr5NrsBwTO6Wdy'
+BASE_URL = 'https://paper-api.alpaca.markets'
+#APCA_API_BASE_URL = 'https://paper-api.alpaca.markets'
+
+# here I initialize the Alpaca API, its required per API documentation
+#REST is a protocol for API calls
+api = REST(API_KEY, API_SECRET, base_url=BASE_URL)
+
+def get_stock_data(symbol, timeframe=TimeFrame.Day, limit=100):
+    #Get historical stock data for alst 100 days to do some analysis
+    start = datetime.now() - timedelta(days=limit)
+    start_str = start.strftime('%Y-%m-%d')
+    #This one is the important line which accesses the API, note its getting 100 days of past data
+    bars = api.get_bars(symbol, timeframe, start=start_str).df
+    return bars
+#SMA is nothing but Statistical Moving Avergae, I used it for recommending Buy or Sell
+def calculate_sma(data, period):
+    #Calculate Simple Moving Average."""
+    return data['close'].rolling(window=period).mean()
+
+def calculate_rsi(data, period=14):
+    #Calculate Relative Strength Index.
+    delta = data['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+#now this one uses SMA and RSI from above to do some analysis.
+#you see the data returned by API contains some list and dictionary of symbol,dates,numbers etc..mostly like a key-value pair
+def analyze_stock(symbol):
+    #Analyze stock using SMA and RSI
+    data = get_stock_data(symbol)
+    data['SMA_20'] = calculate_sma(data, 20)
+    data['SMA_50'] = calculate_sma(data, 50)
+    data['RSI'] = calculate_rsi(data)
+
+    current_price = data['close'].iloc[-1]
+    sma_20 = data['SMA_20'].iloc[-1]
+    sma_50 = data['SMA_50'].iloc[-1]
+    rsi = data['RSI'].iloc[-1]
+
+    print(f"\nAnalysis for {symbol}:")
+    print(f"Current Price: ${current_price:.2f}")
+    print(f"20-day SMA: ${sma_20:.2f}")
+    print(f"50-day SMA: ${sma_50:.2f}")
+    print(f"RSI: {rsi:.2f}")
+
+#code below is inferred from API documentation. I read statistics information online and understand it well
+#you see SMA and RSI go hand in hand, you can't just decide based on one
+    if sma_20 > sma_50 and rsi < 70:
+        return "Buy Signal: Price is above 20-day SMA, which is above 50-day SMA. RSI is below overbought levels."
+    elif sma_20 < sma_50 and rsi > 30:
+        return "Sell Signal: Price is below 20-day SMA, which is below 50-day SMA. RSI is above oversold levels."
+    elif rsi > 70:
+        return "Overbought: Consider selling or waiting for a pullback."
+    elif rsi < 30:
+        return "Oversold: Consider buying or waiting for a bounce."
+    else:
+        return "No clear signal. The stock is in a neutral zone."
+
+def place_order(symbol, qty, side, type, time_in_force):
+    #This is to create a new order.
+    try:
+        order = api.submit_order(
+            symbol=symbol,
+            qty=qty,
+            side=side,
+            type=type,
+            time_in_force=time_in_force
+        )
+        print(f"Order placed: {order.id}")
+        return order
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+def get_portfolio():
+    #get the current portfolio.
+    portfolio = api.list_positions()
+    print("\nCurrent Portfolio:")
+    for position in portfolio:
+        print(f"{position.symbol}: {position.qty} shares, Current Value: ${float(position.market_value):.2f}")
+
+def main():
+    while True:
+        print("\n1. Analyze stock")
+        print("2. Place a buy order")
+        print("3. Place a sell order")
+        print("4. View portfolio")
+        print("5. Exit")
+
+        choice = input("Enter your choice (1-5): ")
+
+        if choice == '1':
+            symbol = input("Enter stock symbol: ").upper()
+            recommendation = analyze_stock(symbol)
+            print(f"Recommendation: {recommendation}")
+
+        elif choice == '2' or choice == '3':
+            symbol = input("Enter stock symbol: ").upper()
+            qty = int(input("Enter quantity: "))
+            side = 'buy' if choice == '2' else 'sell'
+            order = place_order(symbol, qty, side, 'market', 'day')
+            if order:
+                print(f"{side.capitalize()} order placed for {qty} shares of {symbol}")
+
+        elif choice == '4':
+            get_portfolio()
+
+        elif choice == '5':
+            print("Exiting the program.")
+            break
+
+        else:
+            print("Invalid choice. Please try again.")
+       #I put this sleep for 1 second as sometimes API limits hang the call
+        time.sleep(1)
+#below code is useful to run this program directly if this program is called independently
+#otherwise this program can also be a library to be used in other programs using import stmt
+if __name__ == "__main__":
+    main()
